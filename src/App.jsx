@@ -505,6 +505,7 @@ function Presenter({ user, onSignOut, demoMode = false }) {
         onSavePoll={savePoll}
         onDeletePoll={deletePoll}
         onApproveJoinRequest={(request) => approveJoinRequest(services.database, remoteId, request.uid, request.name).catch(showError)}
+        onApproveAllJoinRequests={() => Promise.all(Object.values(session.joinRequests || {}).filter((request) => request.status === 'pending').map((request) => approveJoinRequest(services.database, remoteId, request.uid, request.name))).catch(showError)}
         onRejectJoinRequest={(request) => rejectJoinRequest(services.database, remoteId, request.uid).catch(showError)}
     />
 
@@ -974,7 +975,7 @@ function WorkspaceHome({ workspaces, user, demoMode, onOpen, onCreate, onRename,
     </div>
 }
 
-function PresentationView({ session, shareUrl, slideNumber, slideCount, deckFile, deckPreview, database, isFullscreen, onSlideChange, onSlideCount, onSelectPoll, onAddQuestion, onToggleResults, onClearResponses, onToggleFullscreen, onStop, editingPoll, onEditingPollChange, onSavePoll, onDeletePoll, onApproveJoinRequest, onRejectJoinRequest }) {
+function PresentationView({ session, shareUrl, slideNumber, slideCount, deckFile, deckPreview, database, isFullscreen, onSlideChange, onSlideCount, onSelectPoll, onAddQuestion, onToggleResults, onClearResponses, onToggleFullscreen, onStop, editingPoll, onEditingPollChange, onSavePoll, onDeletePoll, onApproveJoinRequest, onApproveAllJoinRequests, onRejectJoinRequest }) {
     const polls = orderedPolls(session.polls)
     const [questionEditorOpen, setQuestionEditorOpen] = useState(false)
     const slideQuestions = polls.filter((poll) => slideNumber >= poll.slideStart && slideNumber <= poll.slideEnd)
@@ -1056,7 +1057,7 @@ function PresentationView({ session, shareUrl, slideNumber, slideCount, deckFile
                     {hasCorrectAnswer(activePoll) && <div className="presentation-correct-answer"><span><CheckCircle2 size={14} /> CORRECT ANSWER</span><strong>{correctAnswer}</strong></div>}
                     <button className="presentation-add-question" onClick={addQuestionOnCurrentSlide}><Plus size={14} /> Add another question to this slide</button>
                 </> : <div className="presentation-no-question"><Eye size={19} /><p>There is no question on slide {slideNumber}.</p><button onClick={addQuestionOnCurrentSlide}><Plus size={14} /> Add a question</button></div>}
-                {session.accessMode === 'request' && <div className="presentation-join-requests"><div className="presentation-requests-heading"><strong>Join requests</strong><span>{pendingJoinRequests.length}</span></div>{pendingJoinRequests.length ? pendingJoinRequests.map((request) => <div className="presentation-request" key={request.uid}><span className="presentation-request-avatar">{String(request.name || 'P').trim().charAt(0).toUpperCase()}</span><span className="presentation-request-person"><strong>{request.name}</strong><small>{request.email || 'Signed-in participant'}</small></span><button aria-label={`Approve ${request.name}`} title="Approve join request" onClick={() => onApproveJoinRequest(request)}><Check size={13} /></button><button className="presentation-request-decline" aria-label={`Decline ${request.name}`} title="Decline join request" onClick={() => onRejectJoinRequest(request)}><X size={13} /></button></div>) : <p>No pending requests.</p>}</div>}
+                {session.accessMode === 'request' && <div className="presentation-join-requests"><div className="presentation-requests-heading"><strong>Join requests</strong><span>{pendingJoinRequests.length}</span></div>{pendingJoinRequests.length > 0 && <button className="presentation-approve-all" onClick={onApproveAllJoinRequests}><Check size={12} /> Approve all</button>}{pendingJoinRequests.length ? pendingJoinRequests.map((request) => <div className="presentation-request" key={request.uid}><span className="presentation-request-avatar">{String(request.name || 'P').trim().charAt(0).toUpperCase()}</span><span className="presentation-request-person"><strong>{request.name}</strong><small>{request.email || 'Signed-in participant'}</small></span><button aria-label={`Approve ${request.name}`} title="Approve join request" onClick={() => onApproveJoinRequest(request)}><Check size={13} /></button><button className="presentation-request-decline" aria-label={`Decline ${request.name}`} title="Decline join request" onClick={() => onRejectJoinRequest(request)}><X size={13} /></button></div>) : <p>No pending requests.</p>}</div>}
                 <div className="presentation-public-status"><span className={`public-status-dot ${session.resultsVisible ? 'visible' : ''}`} />{session.resultsVisible ? 'Results visible to audience' : 'Results hidden from audience'}</div>
                 <div className="presentation-share-link"><span>ROOM CODE</span><strong>{session.authCode}</strong><small>{shareUrl?.replace(/^https?:\/\//, '')}</small></div>
             </aside>

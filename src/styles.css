@@ -475,6 +475,8 @@ h1, h2, h3, p { margin-top: 0; }
 .presentation-join-requests { display: flex; flex-direction: column; gap: 5px; padding: 9px; border: 1px solid #ffffff1c; border-radius: 3px; background: #ffffff08; }
 .presentation-requests-heading { display: flex; align-items: center; justify-content: space-between; padding-bottom: 5px; color: #e5ece5; font-size: 9px; }
 .presentation-requests-heading > span { display: grid; place-items: center; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px; background: #d6a34b26; color: #e9c982; font: 600 8px 'DM Mono', monospace; }
+.presentation-approve-all { display: inline-flex; align-items: center; justify-content: center; gap: 5px; align-self: flex-start; padding: 5px 8px; border: 1px solid #79b28d66; border-radius: 3px; background: #5f987233; color: #c8e6ce; font-size: 8px; font-weight: 600; cursor: pointer; }
+.presentation-approve-all:hover { background: #5f987266; }
 .presentation-request { display: flex; align-items: center; gap: 6px; padding-top: 6px; border-top: 1px solid #ffffff12; }
 .presentation-request-avatar { display: grid; place-items: center; width: 24px; height: 24px; flex: 0 0 auto; border-radius: 50%; background: #ffffff12; color: #c4ddca; font: 700 9px 'Manrope', sans-serif; }
 .presentation-request-person { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
