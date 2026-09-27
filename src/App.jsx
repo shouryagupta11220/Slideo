@@ -1248,6 +1248,7 @@ function AudienceView({ authCode }) {
     const myAnswer = responses[responseAttendeeId]
     const responseCount = Object.keys(responses).length
     const participantCount = Object.keys(session?.participants || {}).length
+    const ownResultsOnly = session?.accessMode === 'request'
     const resultsReady = !activePoll?.revealAfterAll || (participantCount > 0 && responseCount >= participantCount)
     const showResults = Boolean(session?.resultsVisible) && resultsReady
     const expectedAnswer = activePoll && (activeType === 'msq'
@@ -1271,7 +1272,7 @@ function AudienceView({ authCode }) {
             const percent = responseCount ? Math.round((count / responseCount) * 100) : 0
             const isCorrect = showResults && hasCorrectAnswer(activePoll) && correctOption
             const isWrong = showResults && hasCorrectAnswer(activePoll) && selectedOption && !correctOption
-            return <button key={index} disabled={myAnswer !== undefined || showResults} onClick={() => activeType === 'msq' ? togglePendingOption(index) : submitAnswer(index)} className={`audience-option ${selectedOption ? 'chosen' : ''} ${showResults ? 'result' : ''} ${isCorrect ? 'answer-correct' : ''} ${isWrong ? 'answer-wrong' : ''}`}><span className="audience-option-letter">{String.fromCharCode(65 + index)}</span><span className="audience-option-text">{option || `Option ${String.fromCharCode(65 + index)}`}</span>{showResults && <span className="result-percent">{percent}%</span>}{isCorrect && <CheckCircle2 size={17} />}{isWrong && <X size={17} />}{showResults && <span className="result-fill" style={{ width: `${percent}%` }} />}</button>
+            return <button key={index} disabled={myAnswer !== undefined || showResults} onClick={() => activeType === 'msq' ? togglePendingOption(index) : submitAnswer(index)} className={`audience-option ${selectedOption ? 'chosen' : ''} ${showResults ? 'result' : ''} ${isCorrect ? 'answer-correct' : ''} ${isWrong ? 'answer-wrong' : ''}`}><span className="audience-option-letter">{String.fromCharCode(65 + index)}</span><span className="audience-option-text">{option || `Option ${String.fromCharCode(65 + index)}`}</span>{showResults && !ownResultsOnly && <span className="result-percent">{percent}%</span>}{isCorrect && <CheckCircle2 size={17} />}{isWrong && <X size={17} />}{showResults && !ownResultsOnly && <span className="result-fill" style={{ width: `${percent}%` }} />}</button>
         })}</div>
     }
 
@@ -1336,7 +1337,7 @@ function AudienceView({ authCode }) {
         return <div className="audience-shell"><header className="audience-topbar"><a className="brand" href="/"><span className="brand-mark"><span /></span><span>slideo</span></a></header><main className="audience-message"><LockKeyhole size={25} /><h1>{status === 'pending' ? 'Request sent' : status === 'rejected' ? 'Request declined' : 'Request to join'}</h1><p>{status === 'pending' ? 'The presenter will review your request.' : status === 'rejected' ? requestAttempts >= 3 ? 'Your request was declined. You have used all 3 requests for this presentation.' : `The presenter declined your request. You can send ${3 - requestAttempts} more ${3 - requestAttempts === 1 ? 'request' : 'requests'} for this presentation.` : 'Your name will be shared with the presenter.'}</p>{(!status || (status === 'rejected' && requestAttempts < 3)) && <button className="launch-button" onClick={() => sendJoinRequest(services.database, databaseSessionId, audienceUser).catch((authError) => setError(authError.message))}>{status === 'rejected' ? 'Send another request' : 'Send join request'} <ArrowRight size={15} /></button>}{error && <p>{error}</p>}</main></div>
     }
     if (!session) return <AudienceMessage title="Finding your room…" message="Hang tight while we connect to the presentation." loading />
-    if (session.status === 'ended') return <AudienceMessage title="Presentation ended" message="The presenter has stopped this room." />
+    if (session.status === 'ended') return <AudienceMessage title="Presentation ended" message="The presenter has stopped this room." homeButton />
 
     return (
         <div className="audience-shell">
@@ -1370,7 +1371,7 @@ function AudienceView({ authCode }) {
                         <label className="field-label" htmlFor="audience-dropdown">CHOOSE AN ANSWER</label>
                         <select id="audience-dropdown" className="audience-answer-select" value={pendingAnswer} onChange={(event) => setPendingAnswer(event.target.value)}><option value="">Select an option</option>{asArray(activePoll.options).map((option, index) => <option key={index} value={index}>{option}</option>)}</select>
                         <button className="submit-answer" disabled={pendingAnswer === ''} onClick={() => submitAnswer(pendingAnswer)}>Submit answer</button>
-                    </div> : showResults ? <div className="free-response-result"><span>{responseCount} responses</span>{Object.values(responses).map((answer, index) => <strong className="free-response-item" key={index}>{String(answer)}{activePoll.revealCorrect && hasCorrectAnswer(activePoll) && answerIsCorrect(activePoll, answer) ? <CheckCircle2 size={14} /> : null}</strong>)}</div> : <div className="answer-form">
+                    </div> : showResults ? <div className="free-response-result">{ownResultsOnly ? myAnswer !== undefined ? <strong className="free-response-item">{String(myAnswer)}{activePoll.revealCorrect && hasCorrectAnswer(activePoll) && answerIsCorrect(activePoll, myAnswer) ? <CheckCircle2 size={14} /> : null}</strong> : <span>You didn’t submit a response.</span> : <><span>{responseCount} responses</span>{Object.values(responses).map((answer, index) => <strong className="free-response-item" key={index}>{String(answer)}{activePoll.revealCorrect && hasCorrectAnswer(activePoll) && answerIsCorrect(activePoll, answer) ? <CheckCircle2 size={14} /> : null}</strong>)}</>}</div> : <div className="answer-form">
                         <label className="field-label" htmlFor="audience-free-answer">{activeType === 'number' ? 'ENTER A NUMBER' : activeType === 'fill' ? 'FILL IN THE BLANK' : 'YOUR ANSWER'}</label>
                         {activeType === 'text' ? <textarea id="audience-free-answer" className="audience-text-answer" rows="3" value={pendingAnswer} onChange={(event) => setPendingAnswer(event.target.value)} placeholder="Type your response" /> : <input id="audience-free-answer" className="audience-text-answer" type={activeType === 'number' ? 'number' : 'text'} step={activeType === 'number' ? 'any' : undefined} value={pendingAnswer} onChange={(event) => setPendingAnswer(event.target.value)} placeholder={activeType === 'number' ? 'Enter a number' : 'Type your response'} />}
                         <button className="submit-answer" disabled={!String(pendingAnswer).trim()} onClick={() => submitAnswer(pendingAnswer)}>Submit answer</button>
@@ -1384,8 +1385,8 @@ function AudienceView({ authCode }) {
     )
 }
 
-function AudienceMessage({ title, message, loading }) {
-    return <div className="audience-shell"><header className="audience-topbar"><a className="brand" href="/"><span className="brand-mark"><span /></span><span>slideo</span></a></header><main className="audience-message">{loading ? <LoaderCircle className="spin" size={22} /> : <CircleHelp size={25} />}<h1>{title}</h1><p>{message}</p><a href="/?join=1">Enter a room code <ArrowRight size={15} /></a></main></div>
+function AudienceMessage({ title, message, loading, homeButton }) {
+    return <div className="audience-shell"><header className="audience-topbar"><a className="brand" href="/"><span className="brand-mark"><span /></span><span>slideo</span></a></header><main className="audience-message">{loading ? <LoaderCircle className="spin" size={22} /> : <CircleHelp size={25} />}<h1>{title}</h1><p>{message}</p>{homeButton ? <a href="/"><ArrowLeft size={15} /> Back to home</a> : <a href="/?join=1">Enter a room code <ArrowRight size={15} /></a>}</main></div>
 }
 
 export default App
