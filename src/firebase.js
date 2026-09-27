@@ -1,7 +1,7 @@
 import { getApps, initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
 import { get, getDatabase, onDisconnect, onValue, push, ref, runTransaction, set, update } from 'firebase/database'
-import { getDownloadURL, getStorage, ref as storageRef, uploadBytes } from 'firebase/storage'
+import { deleteObject, getDownloadURL, getStorage, ref as storageRef, uploadBytes } from 'firebase/storage'
 
 const envConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -32,6 +32,37 @@ export async function loadPresenterDraft(database, userId) {
 
 export function savePresenterDraft(database, userId, draft) {
   return set(ref(database, `presenterDrafts/${userId}`), { ...draft, updatedAt: Date.now() })
+}
+
+export async function deleteWorkspaceData(database, storage, userId, workspace) {
+  const updates = {}
+  const sessionIds = new Set([workspace.activeSessionId].filter(Boolean))
+  const roomCodes = new Set()
+  const sessionsSnapshot = await get(ref(database, 'sessions'))
+  const sessions = sessionsSnapshot.val() || {}
+  for (const [sessionId, session] of Object.entries(sessions)) {
+    if (session?.workspaceId === workspace.id) sessionIds.add(sessionId)
+  }
+  for (const sessionId of sessionIds) {
+    const session = sessions[sessionId]
+    if (session?.authCode) roomCodes.add(String(session.authCode).toUpperCase())
+    updates[`sessions/${sessionId}`] = null
+  }
+  const workspaceCode = workspace.session?.authCode ? String(workspace.session.authCode).toUpperCase() : null
+  if (workspaceCode && workspace.activeSessionId) {
+    const codeSnapshot = await get(ref(database, `roomCodes/${workspaceCode}`))
+    if (codeSnapshot.val() === workspace.activeSessionId) roomCodes.add(workspaceCode)
+  }
+  for (const code of roomCodes) updates[`roomCodes/${code}`] = null
+  if (workspace.session?.deck?.databasePath?.startsWith(`presenterDecks/${userId}/`)) {
+    updates[workspace.session.deck.databasePath] = null
+  }
+  if (Object.keys(updates).length) await update(ref(database), updates)
+
+  const deckUrl = workspace.session?.deck?.url
+  if (deckUrl) await deleteObject(storageRef(storage, deckUrl)).catch((error) => {
+    if (error.code !== 'storage/object-not-found') throw error
+  })
 }
 
 export function connectFirebase(config) {
@@ -70,7 +101,7 @@ export async function loadPresenterDeck(database, databasePath) {
   return snapshot.val()
 }
 
-export async function createRemoteSession(database, session) {
+export async function createRemoteSession(database, session, workspaceId) {
   const sessionRef = push(ref(database, 'sessions'))
   let authCode
   let codeRef
@@ -85,7 +116,7 @@ export async function createRemoteSession(database, session) {
   }
   if (!authCode) throw new Error('Could not reserve a unique room code. Please try again.')
   try {
-    await set(sessionRef, { ...session, polls: pollsById(session.polls), authCode, createdAt: Date.now() })
+    await set(sessionRef, { ...session, workspaceId, polls: pollsById(session.polls), authCode, createdAt: Date.now() })
   } catch (error) {
     await set(codeRef, null).catch(() => {})
     throw error

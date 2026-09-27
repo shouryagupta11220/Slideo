@@ -10,7 +10,7 @@ import {
     Pencil, RefreshCw, Trash2, Upload, Users, X,
 } from 'lucide-react'
 import {
-    connectFirebase, createRemoteSession, generateRoomCode, loadPresenterDeck, loadPresenterDraft, patchPoll, patchSession, readFirebaseConfig,
+    connectFirebase, createRemoteSession, deleteWorkspaceData, generateRoomCode, loadPresenterDeck, loadPresenterDraft, patchPoll, patchSession, readFirebaseConfig,
     registerAttendee, reserveRoomCode, resolveRoomCode, savePresenterDraft, subscribeSession, uploadDeck, writeVote,
 } from './firebase'
 
@@ -516,7 +516,7 @@ function Presenter({ user, onSignOut, demoMode = false }) {
             }
             let payload = { ...session, deck, status: 'live', resultsVisible: false }
             if (remoteSession) {
-                const { id, authCode } = await createRemoteSession(services.database, payload)
+                const { id, authCode } = await createRemoteSession(services.database, payload, activeWorkspaceId)
                 payload = { ...payload, authCode }
                 setRemoteId(id)
                 localStorage.setItem('slideo-presenter-session', id)
@@ -720,6 +720,46 @@ function Presenter({ user, onSignOut, demoMode = false }) {
         setWorkspaces((current) => current.map((item) => item.id === workspace.id ? { ...item, name, updatedAt: Date.now() } : item))
     }
 
+    async function deleteWorkspace(workspace) {
+        const name = workspace.name || 'Untitled'
+        if (!window.confirm(`Delete “${name}” and all its questions, responses, deck file, live sessions, and room codes? This cannot be undone.`)) return
+        setBusy(true)
+        try {
+            if (services && user?.uid && !demoMode) {
+                await deleteWorkspaceData(services.database, services.storage, user.uid, workspace)
+            } else {
+                try {
+                    const localSession = JSON.parse(localStorage.getItem(localKey))
+                    if (localSession?.authCode === workspace.session?.authCode) localStorage.removeItem(localKey)
+                } catch { }
+            }
+            if (localStorage.getItem('slideo-presenter-code') === workspace.session?.authCode) {
+                localStorage.removeItem('slideo-presenter-code')
+                localStorage.removeItem('slideo-presenter-session')
+                localStorage.removeItem('slideo-presenter-owner')
+            }
+            const nextWorkspaces = workspaces.filter((item) => item.id !== workspace.id)
+            setWorkspaces(nextWorkspaces)
+            if (user?.uid && !demoMode) await savePresenterDraft(services.database, user.uid, { workspaces: nextWorkspaces })
+            if (activeWorkspaceId === workspace.id) {
+                setActiveWorkspaceId(null)
+                setRemoteId(null)
+                setShareUrl('')
+                setDeckFile(null)
+                setDeckPreview('')
+                setSession(starterSession)
+                setWorkspacePageOpen(true)
+                const params = new URLSearchParams(window.location.search)
+                params.delete('workspace')
+                const query = params.toString()
+                window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`)
+            }
+            setNotice(`Deleted “${name}” and its related data.`)
+            window.setTimeout(() => setNotice(''), 3500)
+        } catch (error) { showError(error) }
+        finally { setBusy(false) }
+    }
+
     function returnToWorkspaceList() {
         setWorkspacePageOpen(true)
         const params = new URLSearchParams(window.location.search)
@@ -772,6 +812,7 @@ function Presenter({ user, onSignOut, demoMode = false }) {
         onOpen={openWorkspace}
         onCreate={createWorkspace}
         onRename={renameWorkspace}
+        onDelete={deleteWorkspace}
         onSignOut={onSignOut}
     />
 
@@ -892,7 +933,7 @@ function Presenter({ user, onSignOut, demoMode = false }) {
     )
 }
 
-function WorkspaceHome({ workspaces, user, demoMode, onOpen, onCreate, onRename, onSignOut }) {
+function WorkspaceHome({ workspaces, user, demoMode, onOpen, onCreate, onRename, onDelete, onSignOut }) {
     const responseCount = (workspace) => asArray(workspace.session?.polls).reduce((total, poll) => total + Object.keys(poll.responses || {}).length, 0)
     return <div className="workspace-home-shell">
         <header className="topbar workspace-home-topbar">
@@ -913,7 +954,7 @@ function WorkspaceHome({ workspaces, user, demoMode, onOpen, onCreate, onRename,
                         <div className="workspace-card-stats"><span><strong>{polls.length}</strong> questions</span><span><strong>{responses}</strong> responses</span></div>
                         <span className="workspace-card-open-label">Open presenter studio <ArrowRight size={14} /></span>
                     </button>
-                    <button className="workspace-rename-button" title="Rename workspace" aria-label={`Rename ${workspace.name || 'Untitled'} workspace`} onClick={() => onRename(workspace)}><span>{workspace.name === 'Untitled' ? 'Rename untitled workspace' : 'Rename'}</span><Pencil size={13} /></button>
+                    <div className="workspace-card-actions"><button className="workspace-rename-button" title="Rename workspace" aria-label={`Rename ${workspace.name || 'Untitled'} workspace`} onClick={() => onRename(workspace)}><span>{workspace.name === 'Untitled' ? 'Rename untitled workspace' : 'Rename'}</span><Pencil size={13} /></button><button className="workspace-delete-button" title="Delete workspace and related data" aria-label={`Delete ${workspace.name || 'Untitled'} workspace`} onClick={() => onDelete(workspace)}><span>Delete</span><Trash2 size={13} /></button></div>
                 </article>
             })}</div> : <div className="workspace-home-empty"><div className="empty-icon"><Presentation size={22} /></div><h2>Create your first workspace</h2><p>Name a workspace to start preparing slides and questions.</p><button className="workspace-create-button" onClick={onCreate}><Plus size={16} /> New workspace</button></div>}
             <footer className="workspace-home-footer">{workspaces.length} {workspaces.length === 1 ? 'workspace' : 'workspaces'} <span>·</span> PRIVATE TO YOUR ACCOUNT</footer>
