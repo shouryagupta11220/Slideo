@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import {
     connectFirebase, createRemoteSession, deleteWorkspaceData, generateRoomCode, loadPresenterDeck, loadPresenterDraft, patchPoll, patchSession, readFirebaseConfig,
-    registerAttendee, reserveRoomCode, resolveRoomCode, savePresenterDraft, subscribeSession, uploadDeck, writeVote,
+    approveJoinRequest, registerAttendee, rejectJoinRequest, reserveRoomCode, resolveRoomCode, savePresenterDraft, sendJoinRequest, subscribeSession, uploadDeck, writeVote,
 } from './firebase'
 
 const localKey = 'slideo-local-session'
@@ -503,6 +503,8 @@ function Presenter({ user, onSignOut, demoMode = false }) {
         onEditingPollChange={setEditingPoll}
         onSavePoll={savePoll}
         onDeletePoll={deletePoll}
+        onApproveJoinRequest={(request) => approveJoinRequest(services.database, remoteId, request.uid, request.name).catch(showError)}
+        onRejectJoinRequest={(request) => rejectJoinRequest(services.database, remoteId, request.uid).catch(showError)}
     />
 
     async function launchSession() {
@@ -903,13 +905,20 @@ function Presenter({ user, onSignOut, demoMode = false }) {
                     {session.status === 'live' && <button className="stop-session-button" onClick={stopSession} disabled={busy || deckUploading}><Square size={15} /> Stop presenting</button>}
                     <button className="launch-button" onClick={session.status === 'live' ? copyLink : launchSession} disabled={busy || deckUploading}>{busy || deckUploading ? <LoaderCircle className="spin" size={16} /> : session.status === 'live' ? <Copy size={15} /> : <MonitorPlay size={16} />}{deckUploading ? 'Saving deck…' : busy ? 'Preparing…' : session.status === 'live' ? 'Copy audience link' : session.status === 'ended' ? 'Start new session' : 'Start session'}<ArrowRight size={15} /></button>
                 </section>
+                <section className="room-access-panel">
+                    <div className="room-access-heading"><div className="room-access-icon"><LockKeyhole size={16} /></div><div><strong>Room access</strong><span>{!remoteId ? 'Start a Firebase session to manage access.' : session.accessMode === 'request' ? 'People need your approval before joining.' : 'Anyone with the room code can join.'}</span></div><select aria-label="Room access" value={session.accessMode || 'public'} disabled={!remoteId} onChange={(event) => setSessionValue('accessMode', event.target.value)}><option value="public">Public</option><option value="request">Permission required</option></select></div>
+                    {session.accessMode === 'request' && <div className="room-requests"><div className="room-requests-heading"><strong>Join requests</strong><span>{Object.values(session.joinRequests || {}).filter((request) => request.status === 'pending').length} pending</span></div>
+                    {Object.values(session.joinRequests || {}).filter((request) => request.status === 'pending').map((request) => <div className="join-request-row" key={request.uid}><div className="join-request-person"><span className="request-avatar">{String(request.name || 'P').trim().charAt(0).toUpperCase()}</span><span><strong>{request.name}</strong><small>{request.email || 'Signed-in participant'} · requested {new Date(request.requestedAt || Date.now()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</small></span></div><div className="join-request-actions"><button className="approve-request" onClick={() => approveJoinRequest(services.database, remoteId, request.uid, request.name).catch(showError)} disabled={!services || !remoteId}><Check size={13} /> Allow</button><button className="decline-request" onClick={() => rejectJoinRequest(services.database, remoteId, request.uid).catch(showError)} disabled={!services || !remoteId}>Decline</button></div></div>)}
+                    {!Object.values(session.joinRequests || {}).some((request) => request.status === 'pending') && <p className="no-join-requests">No pending requests. New requests will appear here.</p>}</div>}
+                </section>
                 <footer className="studio-footer"><span>SLIDEO STUDIO <span className="footer-dot">·</span> LIVE INTERACTION, WITHOUT THE FRICTION</span></footer>
             </main>
             {allResponsesOpen && <div className="responses-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setAllResponsesOpen(false) }}>
                 <section className="responses-dialog" role="dialog" aria-modal="true" aria-labelledby="responses-title">
                     <header className="responses-dialog-header"><div><span className="eyebrow"><span className="eyebrow-line" />SESSION SUMMARY</span><h2 id="responses-title">All responses</h2><p>{voteCount} responses across {polls.length} questions</p></div><button className="icon-button" aria-label="Close all responses" onClick={() => setAllResponsesOpen(false)}><X size={19} /></button></header>
                     <div className="responses-dialog-body">{polls.length ? polls.map((poll, questionIndex) => {
-                        const answers = Object.values(poll.responses || {})
+                        const answerEntries = Object.entries(poll.responses || {})
+                        const answers = answerEntries.map(([, answer]) => answer)
                         const isOptionQuestion = optionQuestionTypes.has(pollType(poll))
                         const correctIndices = pollType(poll) === 'msq' ? asArray(poll.correctIndices).map(Number) : [Number(poll.correctIndex)]
                         const expectedAnswer = pollType(poll) === 'msq'
@@ -922,7 +931,7 @@ function Presenter({ user, onSignOut, demoMode = false }) {
                                 const count = answers.filter((answer) => Array.isArray(answer) ? answer.map(Number).includes(index) : Number(answer) === index).length
                                 const percent = answers.length ? Math.round(count / answers.length * 100) : 0
                                 return <div className={`responses-option ${correctIndices.includes(index) && hasCorrectAnswer(poll) ? 'is-correct' : ''}`} key={index}><div><span>{option || `Option ${index + 1}`}</span><strong>{count} · {percent}%</strong></div><i><span style={{ width: `${percent}%` }} /></i></div>
-                            })}</div> : <div className="responses-text-list">{answers.length ? answers.map((answer, index) => <p key={index}>{String(answer)}</p>) : <span>No responses yet.</span>}</div>}
+                            })}<div className="responses-text-list">{answers.map((answer, index) => <p key={index}><strong>{session.participants?.[answerEntries[index][0]]?.name || 'Participant'}:</strong> {Array.isArray(answer) ? answer.map((item) => asArray(poll.options)[Number(item)]).join(', ') : asArray(poll.options)[Number(answer)] || String(answer)}</p>)}</div></div> : <div className="responses-text-list">{answers.length ? answers.map((answer, index) => <p key={index}><strong>{session.participants?.[answerEntries[index][0]]?.name || 'Participant'}:</strong> {String(answer)}</p>) : <span>No responses yet.</span>}</div>}
                             {hasCorrectAnswer(poll) && <div className="responses-correct-answer"><CheckCircle2 size={14} /><span>Correct answer</span><strong>{expectedAnswer}</strong></div>}
                         </article>
                     }) : <div className="responses-empty"><BarChart3 size={22} /><h3>No questions yet</h3><p>Add a poll to start collecting responses.</p></div>}</div>
@@ -962,7 +971,7 @@ function WorkspaceHome({ workspaces, user, demoMode, onOpen, onCreate, onRename,
     </div>
 }
 
-function PresentationView({ session, shareUrl, slideNumber, slideCount, deckFile, deckPreview, database, isFullscreen, onSlideChange, onSlideCount, onSelectPoll, onAddQuestion, onToggleResults, onToggleFullscreen, onStop, editingPoll, onEditingPollChange, onSavePoll, onDeletePoll }) {
+function PresentationView({ session, shareUrl, slideNumber, slideCount, deckFile, deckPreview, database, isFullscreen, onSlideChange, onSlideCount, onSelectPoll, onAddQuestion, onToggleResults, onToggleFullscreen, onStop, editingPoll, onEditingPollChange, onSavePoll, onDeletePoll, onApproveJoinRequest, onRejectJoinRequest }) {
     const polls = orderedPolls(session.polls)
     const [questionEditorOpen, setQuestionEditorOpen] = useState(false)
     const slideQuestions = polls.filter((poll) => slideNumber >= poll.slideStart && slideNumber <= poll.slideEnd)
@@ -982,6 +991,7 @@ function PresentationView({ session, shareUrl, slideNumber, slideCount, deckFile
     }
 
     const freeResponses = responses.filter((answer) => !Array.isArray(answer) && typeof answer !== 'number')
+    const pendingJoinRequests = Object.values(session.joinRequests || {}).filter((request) => request.status === 'pending')
 
     function addQuestionOnCurrentSlide() {
         onAddQuestion()
@@ -1042,6 +1052,7 @@ function PresentationView({ session, shareUrl, slideNumber, slideCount, deckFile
                     {hasCorrectAnswer(activePoll) && <div className="presentation-correct-answer"><span><CheckCircle2 size={14} /> CORRECT ANSWER</span><strong>{correctAnswer}</strong></div>}
                     <button className="presentation-add-question" onClick={addQuestionOnCurrentSlide}><Plus size={14} /> Add another question to this slide</button>
                 </> : <div className="presentation-no-question"><Eye size={19} /><p>There is no question on slide {slideNumber}.</p><button onClick={addQuestionOnCurrentSlide}><Plus size={14} /> Add a question</button></div>}
+                {session.accessMode === 'request' && <div className="presentation-join-requests"><div className="presentation-requests-heading"><strong>Join requests</strong><span>{pendingJoinRequests.length}</span></div>{pendingJoinRequests.length ? pendingJoinRequests.map((request) => <div className="presentation-request" key={request.uid}><span className="presentation-request-avatar">{String(request.name || 'P').trim().charAt(0).toUpperCase()}</span><span className="presentation-request-person"><strong>{request.name}</strong><small>{request.email || 'Signed-in participant'}</small></span><button aria-label={`Approve ${request.name}`} title="Approve join request" onClick={() => onApproveJoinRequest(request)}><Check size={13} /></button><button className="presentation-request-decline" aria-label={`Decline ${request.name}`} title="Decline join request" onClick={() => onRejectJoinRequest(request)}><X size={13} /></button></div>) : <p>No pending requests.</p>}</div>}
                 <div className="presentation-public-status"><span className={`public-status-dot ${session.resultsVisible ? 'visible' : ''}`} />{session.resultsVisible ? 'Results visible to audience' : 'Results hidden from audience'}</div>
                 <div className="presentation-share-link"><span>ROOM CODE</span><strong>{session.authCode}</strong><small>{shareUrl?.replace(/^https?:\/\//, '')}</small></div>
             </aside>
@@ -1155,6 +1166,13 @@ function AudienceView({ authCode }) {
     const [error, setError] = useState('')
     const [databaseSessionId, setDatabaseSessionId] = useState(null)
     const [isLocalRoom, setIsLocalRoom] = useState(false)
+    const [audienceUser, setAudienceUser] = useState(null)
+    const [audienceEmail, setAudienceEmail] = useState('')
+    const [audiencePassword, setAudiencePassword] = useState('')
+    const [audienceName, setAudienceName] = useState('')
+    const [audienceAuthMode, setAudienceAuthMode] = useState('login')
+    const [authBusy, setAuthBusy] = useState(false)
+    const [joinRequestSent, setJoinRequestSent] = useState(false)
     const registeredRef = useRef(false)
     const normalizedCode = authCode.trim().toUpperCase()
     const [attendeeId] = useState(() => {
@@ -1168,6 +1186,8 @@ function AudienceView({ authCode }) {
         if (!config?.apiKey || !config?.databaseURL) return null
         try { return connectFirebase(config) } catch { return null }
     }, [config])
+
+    useEffect(() => services ? onAuthStateChanged(services.auth, setAudienceUser) : undefined, [services])
 
     useEffect(() => {
         let active = true
@@ -1202,23 +1222,25 @@ function AudienceView({ authCode }) {
             unsubscribe = subscribeSession(services.database, resolvedId, (data) => {
                 const normalizedSession = normalizeSession(data)
                 setSession(normalizedSession)
-                if (data && !registeredRef.current) {
+                const accessAllowed = data?.accessMode !== 'request' || Boolean(data?.joinRequests?.[audienceUser?.uid]?.status === 'approved')
+                if (data && accessAllowed && !registeredRef.current) {
                     registeredRef.current = true
-                    registerAttendee(services.database, resolvedId, attendeeId).catch(() => { })
+                    registerAttendee(services.database, resolvedId, audienceUser?.uid || attendeeId, audienceUser?.displayName || audienceUser?.email || 'Guest').catch(() => { })
                 }
             })
         }).catch(() => {
             if (active) setError('Could not verify this room code. Check Firebase Realtime Database access.')
         })
         return () => { active = false; unsubscribe() }
-    }, [normalizedCode, services, attendeeId])
+    }, [normalizedCode, services, attendeeId, audienceUser])
 
     const polls = asArray(session?.polls)
     const activePoll = polls.find((poll) => poll.id === session?.activePollId) || polls.find((poll) => Number(poll.slideStart) <= Number(session?.activeSlide) && Number(poll.slideEnd) >= Number(session?.activeSlide))
     const activeType = pollType(activePoll)
     const [pendingAnswer, setPendingAnswer] = useState('')
     const responses = activePoll?.responses || {}
-    const myAnswer = responses[attendeeId]
+    const responseAttendeeId = session?.accessMode === 'request' ? audienceUser?.uid : attendeeId
+    const myAnswer = responses[responseAttendeeId]
     const responseCount = Object.keys(responses).length
     const participantCount = Object.keys(session?.participants || {}).length
     const resultsReady = !activePoll?.revealAfterAll || (participantCount > 0 && responseCount >= participantCount)
@@ -1267,16 +1289,41 @@ function AudienceView({ authCode }) {
             response = Number(answer)
         }
         if (services && databaseSessionId) {
-            try { await writeVote(services.database, databaseSessionId, activePoll.id, attendeeId, response) }
+            try { await writeVote(services.database, databaseSessionId, activePoll.id, responseAttendeeId, response) }
             catch { setError('Your answer could not be sent. Check the Firebase Realtime Database rules.') }
         } else if (isLocalRoom) {
-            const next = { ...session, polls: polls.map((poll) => poll.id === activePoll.id ? { ...poll, responses: { ...(poll.responses || {}), [attendeeId]: response } } : poll) }
+            const next = { ...session, polls: polls.map((poll) => poll.id === activePoll.id ? { ...poll, responses: { ...(poll.responses || {}), [responseAttendeeId]: response } } : poll) }
             setSession(next)
             localStorage.setItem(localKey, JSON.stringify(next))
         }
     }
 
     if (error) return <AudienceMessage title="Room unavailable" message={error} />
+    if (session?.accessMode === 'request' && !session?.joinRequests?.[audienceUser?.uid]?.status?.match(/^approved$/)) {
+        const status = audienceUser ? session.joinRequests?.[audienceUser.uid]?.status : null
+        if (!audienceUser) return <div className="auth-shell audience-auth-shell">
+            <header className="auth-topbar"><a className="brand" href="/"><span className="brand-mark"><span /></span><span>slideo</span></a><span className="join-header-label">ROOM ACCESS</span></header>
+            <main className="auth-main">
+                <div className="auth-intro"><span className="eyebrow"><span className="eyebrow-line" />PRESENTER APPROVAL</span><h1>Good ideas<br /><span>need a room.</span></h1><p>Sign in to request access to <strong>{session.title}</strong>. The presenter will approve your request before you join.</p><div className="auth-art" aria-hidden="true"><span className="auth-art-counter">ROOM ACCESS / PRIVATE</span><span className="auth-art-rule" /><span className="auth-art-swatch" /><span className="auth-art-caption">SIGN IN / REQUEST / JOIN</span></div></div>
+                <section className="auth-panel" aria-labelledby="audience-auth-title">
+                    <div className="room-signin-notice"><LockKeyhole size={15} /><span>To join this room, sign in first.</span></div>
+                    <div className="auth-panel-heading"><span className="auth-lock"><LockKeyhole size={16} /></span><div><h2 id="audience-auth-title">{audienceAuthMode === 'login' ? 'Welcome back' : 'Create your account'}</h2><p>{audienceAuthMode === 'login' ? 'Sign in to request room access.' : 'Create an account to request access.'}</p></div></div>
+                    <div className="auth-tabs" role="tablist" aria-label="Account access"><button role="tab" aria-selected={audienceAuthMode === 'login'} className={audienceAuthMode === 'login' ? 'active' : ''} onClick={() => { setAudienceAuthMode('login'); setError('') }}>Log in</button><button role="tab" aria-selected={audienceAuthMode === 'signup'} className={audienceAuthMode === 'signup' ? 'active' : ''} onClick={() => { setAudienceAuthMode('signup'); setError('') }}>Sign up</button></div>
+                    <button className="google-button" type="button" disabled={authBusy || !services} onClick={async () => { setError(''); setAuthBusy(true); try { await signInWithPopup(services.auth, new GoogleAuthProvider()) } catch (authError) { setError(authError.message || 'Google sign-in failed.') } finally { setAuthBusy(false) } }}><span className="google-g">G</span>Continue with Google</button>
+                    <div className="auth-separator"><span>or continue with email</span></div>
+                    <form className="auth-form" onSubmit={async (event) => { event.preventDefault(); setError(''); setAuthBusy(true); try { if (audienceAuthMode === 'signup') { if (!audienceName.trim()) throw new Error('Enter your name to create an account.'); const credential = await createUserWithEmailAndPassword(services.auth, audienceEmail, audiencePassword); await updateProfile(credential.user, { displayName: audienceName.trim() }) } else { await signInWithEmailAndPassword(services.auth, audienceEmail, audiencePassword) } } catch (authError) { setError(authError.message || 'Sign-in failed.') } finally { setAuthBusy(false) } }}>
+                        {audienceAuthMode === 'signup' && <><label htmlFor="audience-auth-name">Your name</label><input id="audience-auth-name" type="text" autoComplete="name" maxLength={80} required value={audienceName} onChange={(event) => setAudienceName(event.target.value)} placeholder="Name shown to your presenter" /></>}
+                        <label htmlFor="audience-auth-email">Email address</label><input id="audience-auth-email" type="email" autoComplete="email" required value={audienceEmail} onChange={(event) => setAudienceEmail(event.target.value)} placeholder="you@example.com" />
+                        <label htmlFor="audience-auth-password">Password</label><input id="audience-auth-password" type="password" autoComplete={audienceAuthMode === 'login' ? 'current-password' : 'new-password'} minLength={6} required value={audiencePassword} onChange={(event) => setAudiencePassword(event.target.value)} placeholder="At least 6 characters" />
+                        {error && <div className="auth-error" role="alert">{error}</div>}
+                        <button className="auth-submit" type="submit" disabled={authBusy || !services}>{authBusy ? <LoaderCircle className="spin" size={16} /> : <LogIn size={16} />}{audienceAuthMode === 'login' ? 'Log in' : 'Create account'}<ArrowRight size={15} /></button>
+                    </form>
+                    <p className="auth-footnote">Joining a public room? <a href="/?join=1">Enter its room code</a></p>
+                </section>
+            </main>
+        </div>
+        return <div className="audience-shell"><header className="audience-topbar"><a className="brand" href="/"><span className="brand-mark"><span /></span><span>slideo</span></a></header><main className="audience-message"><LockKeyhole size={25} /><h1>{status === 'pending' ? 'Request sent' : status === 'rejected' ? 'Request declined' : 'Request to join'}</h1><p>{status === 'pending' ? 'The presenter will review your request.' : status === 'rejected' ? 'The presenter did not approve your request.' : 'Your name will be shared with the presenter.'}</p>{!status && <button className="launch-button" onClick={() => sendJoinRequest(services.database, databaseSessionId, audienceUser).catch((authError) => setError(authError.message))}>Send join request <ArrowRight size={15} /></button>}{error && <p>{error}</p>}</main></div>
+    }
     if (!session) return <AudienceMessage title="Finding your room…" message="Hang tight while we connect to the presentation." loading />
     if (session.status === 'ended') return <AudienceMessage title="Presentation ended" message="The presenter has stopped this room." />
 

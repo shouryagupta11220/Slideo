@@ -111,7 +111,17 @@ export async function createRemoteSession(database, session, workspaceId) {
     codeRef = ref(database, `roomCodes/${authCode}`)
     const reservation = await runTransaction(codeRef, (current) => current === null ? sessionRef.key : undefined, { applyLocally: false })
     if (reservation.committed) break
-    if (preferredCode) throw new Error('This room code is no longer available. Reopen the workspace to refresh its code, then start the session again.')
+    if (preferredCode) {
+      const existingId = await get(codeRef).then((snapshot) => snapshot.val())
+      if (existingId && existingId !== sessionRef.key) {
+        const existingSession = await get(ref(database, `sessions/${existingId}`)).then((snapshot) => snapshot.val())
+        if (existingSession?.workspaceId === workspaceId && existingSession.status === 'ended') {
+          const transferred = await runTransaction(codeRef, (current) => current === existingId ? sessionRef.key : undefined, { applyLocally: false })
+          if (transferred.committed) break
+        }
+      }
+      throw new Error('This room code is already in use. Reset the room code and try again.')
+    }
     authCode = null
   }
   if (!authCode) throw new Error('Could not reserve a unique room code. Please try again.')
@@ -160,8 +170,25 @@ export function writeVote(database, sessionId, pollId, attendeeId, answerIndex) 
   return set(ref(database, `sessions/${sessionId}/polls/${pollId}/responses/${attendeeId}`), answerIndex)
 }
 
-export async function registerAttendee(database, sessionId, attendeeId) {
+export async function registerAttendee(database, sessionId, attendeeId, name = null) {
   const participantRef = ref(database, `sessions/${sessionId}/participants/${attendeeId}`)
   await onDisconnect(participantRef).remove()
-  return set(participantRef, { joinedAt: Date.now() })
+  return set(participantRef, { joinedAt: Date.now(), ...(name ? { name } : {}) })
+}
+
+export function sendJoinRequest(database, sessionId, user) {
+  return set(ref(database, `sessions/${sessionId}/joinRequests/${user.uid}`), {
+    uid: user.uid, name: user.displayName || user.email || 'Participant', email: user.email || '', requestedAt: Date.now(), status: 'pending',
+  })
+}
+
+export function approveJoinRequest(database, sessionId, uid, name) {
+  return update(ref(database), {
+    [`sessions/${sessionId}/joinRequests/${uid}/status`]: 'approved',
+    [`sessions/${sessionId}/participants/${uid}`]: { joinedAt: Date.now(), name: name || 'Participant' },
+  })
+}
+
+export function rejectJoinRequest(database, sessionId, uid) {
+  return update(ref(database), { [`sessions/${sessionId}/joinRequests/${uid}/status`]: 'rejected' })
 }
