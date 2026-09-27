@@ -947,13 +947,29 @@ function Presenter({ user, onSignOut, demoMode = false }) {
 }
 
 function WorkspaceHome({ workspaces, user, demoMode, onOpen, onCreate, onRename, onDelete, onSignOut }) {
+    const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+    const profileMenuRef = useRef(null)
     const responseCount = (workspace) => asArray(workspace.session?.polls).reduce((total, poll) => total + Object.keys(poll.responses || {}).length, 0)
+    useEffect(() => {
+        if (!profileMenuOpen) return undefined
+        function closeMenu(event) {
+            if (!profileMenuRef.current?.contains(event.target)) setProfileMenuOpen(false)
+        }
+        function handleMenuKey(event) {
+            if (event.key === 'Escape') setProfileMenuOpen(false)
+        }
+        document.addEventListener('pointerdown', closeMenu)
+        document.addEventListener('keydown', handleMenuKey)
+        return () => {
+            document.removeEventListener('pointerdown', closeMenu)
+            document.removeEventListener('keydown', handleMenuKey)
+        }
+    }, [profileMenuOpen])
     return <div className="workspace-home-shell">
         <header className="topbar workspace-home-topbar">
             <a className="brand" href="/" aria-label="Slideo home"><span className="brand-mark"><span /></span><span>slideo</span></a>
             <span className="workspace-home-label">YOUR WORKSPACES</span>
-            <a className="join-room-link" href="/?join=1"><KeyRound size={14} /><span>Join room</span></a>
-            <div className="profile-menu-wrap"><span className="workspace-user-label">{demoMode ? 'Local demo' : user?.displayName || user?.email || 'Presenter'}</span><button className="workspace-signout" onClick={onSignOut}><LogOut size={14} />{demoMode ? 'Exit demo' : 'Sign out'}</button></div>
+            <div className="workspace-home-actions"><a className="join-room-link" href="/?join=1"><KeyRound size={14} /><span>Join room</span></a><div className="profile-menu-wrap" ref={profileMenuRef}><button className="avatar-button" aria-label="Open profile menu" aria-haspopup="menu" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)}><span className="avatar">{demoMode ? 'D' : (user?.displayName?.[0] || user?.email?.[0] || 'S').toUpperCase()}</span></button>{profileMenuOpen && <div className="profile-menu" role="menu"><div className="profile-menu-identity"><strong>{demoMode ? 'Local demo' : user?.displayName || 'Presenter'}</strong><span>{demoMode ? 'This browser only' : user?.email || 'Signed in'}</span></div><div className="profile-menu-divider" /><button className="profile-menu-item" role="menuitem" onClick={() => { setProfileMenuOpen(false); onSignOut() }}><LogOut size={14} />{demoMode ? 'Exit demo' : 'Sign out'}</button></div>}</div></div>
         </header>
         <main className="workspace-home-main">
             <div className="workspace-home-intro"><div><span className="eyebrow"><span className="eyebrow-line" />PRESENTER HOME</span><h1>Your workspaces</h1><p>Keep each presentation and its questions in a separate workspace.</p></div><button className="workspace-create-button" onClick={onCreate}><Plus size={16} /> New workspace</button></div>

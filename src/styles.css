@@ -563,7 +563,7 @@ h1, h2, h3, p { margin-top: 0; }
 .workspace-home-shell { min-height: 100vh; background: #f6f5f0; }
 .workspace-home-topbar { justify-content: space-between; }
 .workspace-home-label { margin-left: 34px; color: #78857b; font: 500 9px 'DM Mono', monospace; letter-spacing: .6px; }
-.workspace-home-topbar .profile-menu-wrap { display: flex; align-items: center; gap: 13px; margin-left: auto; }
+.workspace-home-actions { display: flex; align-items: center; gap: 13px; margin-left: auto; }
 .workspace-user-label { max-width: 220px; overflow: hidden; color: #758078; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-signout, .workspace-back-link { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: #638071; font-size: 10px; font-weight: 600; cursor: pointer; }
 .workspace-home-main { width: min(1080px, 89vw); margin: 0 auto; padding: 65px 0 30px; }
