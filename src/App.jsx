@@ -957,7 +957,7 @@ function WorkspaceHome({ workspaces, user, demoMode, onOpen, onCreate, onRename,
                     <div className="workspace-card-actions"><button className="workspace-rename-button" title="Rename workspace" aria-label={`Rename ${workspace.name || 'Untitled'} workspace`} onClick={() => onRename(workspace)}><span>{workspace.name === 'Untitled' ? 'Rename untitled workspace' : 'Rename'}</span><Pencil size={13} /></button><button className="workspace-delete-button" title="Delete workspace and related data" aria-label={`Delete ${workspace.name || 'Untitled'} workspace`} onClick={() => onDelete(workspace)}><span>Delete</span><Trash2 size={13} /></button></div>
                 </article>
             })}</div> : <div className="workspace-home-empty"><div className="empty-icon"><Presentation size={22} /></div><h2>Create your first workspace</h2><p>Name a workspace to start preparing slides and questions.</p><button className="workspace-create-button" onClick={onCreate}><Plus size={16} /> New workspace</button></div>}
-            <footer className="workspace-home-footer">{workspaces.length} {workspaces.length === 1 ? 'workspace' : 'workspaces'} <span>·</span> PRIVATE TO YOUR ACCOUNT</footer>
+            <footer className="workspace-home-footer"><span className="workspace-home-count">{workspaces.length} {workspaces.length === 1 ? 'workspace' : 'workspaces'} · PRIVATE TO YOUR ACCOUNT</span><span className="workspace-home-credit">Developed by <a href="https://divyanshugupta.pages.dev" target="_blank" rel="noreferrer">Divyanshu Gupta</a></span></footer>
         </main>
     </div>
 }
