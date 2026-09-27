@@ -497,6 +497,7 @@ function Presenter({ user, onSignOut, demoMode = false }) {
         onSelectPoll={activatePresentationPoll}
         onAddQuestion={addPoll}
         onToggleResults={togglePublicResults}
+        onClearResponses={(pollId) => updatePoll(pollId, { responses: {} })}
         onToggleFullscreen={toggleFullscreen}
         onStop={stopSession}
         editingPoll={editingPoll}
@@ -798,6 +799,7 @@ function Presenter({ user, onSignOut, demoMode = false }) {
         onSlideChange={changeSlide}
         onSlideCount={setActualSlideCount}
         onToggleResults={togglePublicResults}
+        onClearResponses={(pollId) => updatePoll(pollId, { responses: {} })}
         onToggleFullscreen={toggleFullscreen}
         onStop={stopSession}
         editingPoll={editingPoll}
@@ -926,6 +928,7 @@ function Presenter({ user, onSignOut, demoMode = false }) {
                             : isOptionQuestion ? asArray(poll.options)[poll.correctIndex] : poll.correctAnswer
                         return <article className="responses-question-card" key={poll.id || questionIndex}>
                             <div className="responses-question-heading"><span>Q{String(questionIndex + 1).padStart(2, '0')} · SLIDE {poll.slideStart}{poll.slideEnd !== poll.slideStart ? `–${poll.slideEnd}` : ''}</span><strong>{answers.length} {answers.length === 1 ? 'response' : 'responses'}</strong></div>
+                            {answers.length > 0 && <button className="responses-clear-button" onClick={() => { if (window.confirm(`Clear all ${answers.length} responses for “${poll.question || 'Untitled question'}”? Participants can respond again.`)) updatePoll(poll.id, { responses: {} }) }}><Trash2 size={13} /> Clear responses</button>}
                             <h3>{poll.question || 'Untitled question'}</h3><span className="responses-question-type">{questionTypes.find(([type]) => type === pollType(poll))?.[1] || 'Question'}</span>
                             {isOptionQuestion ? <div className="responses-breakdown">{asArray(poll.options).map((option, index) => {
                                 const count = answers.filter((answer) => Array.isArray(answer) ? answer.map(Number).includes(index) : Number(answer) === index).length
@@ -971,7 +974,7 @@ function WorkspaceHome({ workspaces, user, demoMode, onOpen, onCreate, onRename,
     </div>
 }
 
-function PresentationView({ session, shareUrl, slideNumber, slideCount, deckFile, deckPreview, database, isFullscreen, onSlideChange, onSlideCount, onSelectPoll, onAddQuestion, onToggleResults, onToggleFullscreen, onStop, editingPoll, onEditingPollChange, onSavePoll, onDeletePoll, onApproveJoinRequest, onRejectJoinRequest }) {
+function PresentationView({ session, shareUrl, slideNumber, slideCount, deckFile, deckPreview, database, isFullscreen, onSlideChange, onSlideCount, onSelectPoll, onAddQuestion, onToggleResults, onClearResponses, onToggleFullscreen, onStop, editingPoll, onEditingPollChange, onSavePoll, onDeletePoll, onApproveJoinRequest, onRejectJoinRequest }) {
     const polls = orderedPolls(session.polls)
     const [questionEditorOpen, setQuestionEditorOpen] = useState(false)
     const slideQuestions = polls.filter((poll) => slideNumber >= poll.slideStart && slideNumber <= poll.slideEnd)
@@ -1041,6 +1044,7 @@ function PresentationView({ session, shareUrl, slideNumber, slideCount, deckFile
                     <h1 className="presentation-question">{activePoll.question || 'Untitled question'}</h1>
                     <span className="presentation-question-type">{questionTypeLabel}</span>
                     <div className="presentation-response-total"><Users size={15} /><strong>{responses.length}</strong><span>responses</span></div>
+                    {responses.length > 0 && <button className="presentation-clear-responses" onClick={() => { if (window.confirm(`Clear all ${responses.length} responses for this question? Participants can respond again.`)) onClearResponses?.(activePoll.id) }}><Trash2 size={13} /> Clear responses</button>}
                     {optionQuestionTypes.has(pollType(activePoll)) ? <div className="presentation-result-list">{asArray(activePoll.options).map((option, index) => {
                         const count = optionCount(index)
                         const percent = responses.length ? Math.round(count / responses.length * 100) : 0
