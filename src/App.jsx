@@ -1308,7 +1308,9 @@ function AudienceView({ authCode }) {
 
     if (error) return <AudienceMessage title="Room unavailable" message={error} />
     if (session?.accessMode === 'request' && !session?.joinRequests?.[audienceUser?.uid]?.status?.match(/^approved$/)) {
-        const status = audienceUser ? session.joinRequests?.[audienceUser.uid]?.status : null
+        const joinRequest = audienceUser ? session.joinRequests?.[audienceUser.uid] : null
+        const status = joinRequest?.status || null
+        const requestAttempts = Number(joinRequest?.attempts) || (joinRequest ? 1 : 0)
         if (!audienceUser) return <div className="auth-shell audience-auth-shell">
             <header className="auth-topbar"><a className="brand" href="/"><span className="brand-mark"><span /></span><span>slideo</span></a><span className="join-header-label">ROOM ACCESS</span></header>
             <main className="auth-main">
@@ -1330,7 +1332,7 @@ function AudienceView({ authCode }) {
                 </section>
             </main>
         </div>
-        return <div className="audience-shell"><header className="audience-topbar"><a className="brand" href="/"><span className="brand-mark"><span /></span><span>slideo</span></a></header><main className="audience-message"><LockKeyhole size={25} /><h1>{status === 'pending' ? 'Request sent' : status === 'rejected' ? 'Request declined' : 'Request to join'}</h1><p>{status === 'pending' ? 'The presenter will review your request.' : status === 'rejected' ? 'The presenter did not approve your request.' : 'Your name will be shared with the presenter.'}</p>{!status && <button className="launch-button" onClick={() => sendJoinRequest(services.database, databaseSessionId, audienceUser).catch((authError) => setError(authError.message))}>Send join request <ArrowRight size={15} /></button>}{error && <p>{error}</p>}</main></div>
+        return <div className="audience-shell"><header className="audience-topbar"><a className="brand" href="/"><span className="brand-mark"><span /></span><span>slideo</span></a></header><main className="audience-message"><LockKeyhole size={25} /><h1>{status === 'pending' ? 'Request sent' : status === 'rejected' ? 'Request declined' : 'Request to join'}</h1><p>{status === 'pending' ? 'The presenter will review your request.' : status === 'rejected' ? requestAttempts >= 3 ? 'Your request was declined. You have used all 3 requests for this presentation.' : `The presenter declined your request. You can send ${3 - requestAttempts} more ${3 - requestAttempts === 1 ? 'request' : 'requests'} for this presentation.` : 'Your name will be shared with the presenter.'}</p>{(!status || (status === 'rejected' && requestAttempts < 3)) && <button className="launch-button" onClick={() => sendJoinRequest(services.database, databaseSessionId, audienceUser).catch((authError) => setError(authError.message))}>{status === 'rejected' ? 'Send another request' : 'Send join request'} <ArrowRight size={15} /></button>}{error && <p>{error}</p>}</main></div>
     }
     if (!session) return <AudienceMessage title="Finding your room…" message="Hang tight while we connect to the presentation." loading />
     if (session.status === 'ended') return <AudienceMessage title="Presentation ended" message="The presenter has stopped this room." />

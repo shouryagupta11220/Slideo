@@ -177,8 +177,20 @@ export async function registerAttendee(database, sessionId, attendeeId, name = n
 }
 
 export function sendJoinRequest(database, sessionId, user) {
-  return set(ref(database, `sessions/${sessionId}/joinRequests/${user.uid}`), {
-    uid: user.uid, name: user.displayName || user.email || 'Participant', email: user.email || '', requestedAt: Date.now(), status: 'pending',
+  const requestRef = ref(database, `sessions/${sessionId}/joinRequests/${user.uid}`)
+  return runTransaction(requestRef, (current) => {
+    if (current?.status === 'pending' || current?.status === 'approved') return
+    const attempts = current ? Number(current.attempts) || 1 : 0
+    if (attempts >= 3) return
+    return {
+      uid: user.uid, name: user.displayName || user.email || 'Participant', email: user.email || '',
+      requestedAt: Date.now(), status: 'pending', attempts: attempts + 1,
+    }
+  }, { applyLocally: false }).then((result) => {
+    if (!result.committed && Number(result.snapshot.val()?.attempts) >= 3) {
+      throw new Error('You have used all 3 join requests for this presentation.')
+    }
+    return result
   })
 }
 
