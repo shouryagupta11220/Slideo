@@ -952,6 +952,7 @@ function WorkspaceHome({ workspaces, user, demoMode, onOpen, onCreate, onRename,
         <header className="topbar workspace-home-topbar">
             <a className="brand" href="/" aria-label="Slideo home"><span className="brand-mark"><span /></span><span>slideo</span></a>
             <span className="workspace-home-label">YOUR WORKSPACES</span>
+            <a className="join-room-link" href="/?join=1"><KeyRound size={14} /><span>Join room</span></a>
             <div className="profile-menu-wrap"><span className="workspace-user-label">{demoMode ? 'Local demo' : user?.displayName || user?.email || 'Presenter'}</span><button className="workspace-signout" onClick={onSignOut}><LogOut size={14} />{demoMode ? 'Exit demo' : 'Sign out'}</button></div>
         </header>
         <main className="workspace-home-main">
