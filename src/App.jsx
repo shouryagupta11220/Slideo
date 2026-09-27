@@ -839,6 +839,8 @@ function Presenter({ user, onSignOut, demoMode = false }) {
                 </div>
             </header>
 
+            <div className="mobile-workspace-back-wrap"><button className="mobile-workspace-back" onClick={returnToWorkspaceList}><ArrowLeft size={14} /> Back to workspaces</button></div>
+
             <main className="studio">
                 <section className="workspace-heading">
                     <div>
